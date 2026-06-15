@@ -11,7 +11,8 @@ from database.db_manager import (
     get_book_by_id, search_books, 
     create_purchase_invoice, 
     validate_download_token, 
-    check_is_admin
+    check_is_admin,
+    get_book_by_short_id
 )
 from utils.keyboards import (
     get_categories_keyboard, 
@@ -33,51 +34,87 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # دریافت دسته‌بندی‌ها از دیتابیس
     categories = await get_categories()
 
-    # بررسی لینک دانلود
-    if context.args and context.args[0].startswith("dl_"):
-        token = context.args[0].replace("dl_", "")
-        processing_msg = await update.message.reply_text("⏳ در حال بررسی لینک دانلود شما...")
+    # بخش بررسی ورودی‌های استارت (دیپ‌لینک‌ها)
+    if context.args:
+        arg = context.args[0]
         
-        # اعتبارسنجی توکن در دیتابیس
-        validation = await validate_download_token(token)
-        
-        if validation["status"] == "error":
-            await processing_msg.edit_text(validation["message"])
-        else:
-            book_id = validation["book_id"]
-            book = await get_book_by_id(book_id)
+        # ۱. بررسی لینک دانلود موقت (dl_)
+        if arg.startswith("dl_"):
+            token = arg.replace("dl_", "")
+            processing_msg = await update.message.reply_text("⏳ در حال بررسی لینک دانلود شما...")
             
-            if book and "file_link" in book:
-                await processing_msg.edit_text(f"✅ لینک تایید شد. در حال آماده‌سازی کتاب: *{book['title']}* ...", parse_mode="Markdown")
-                
-                try:
-                    success_msg = f"📚 نام کتاب: {book['title']}\n\n📥 لینک دانلود:\n{book['file_link']}\n\n@MEDBookbot\n\n⚠️ این پیام برای امنیت بیشتر، یک ساعت دیگر به صورت خودکار حذف خواهد شد."
-                    sent_message = await context.bot.send_message(
-                        chat_id=user.id,
-                        text=success_msg,
-                        disable_web_page_preview=True
-                    )
-                    await processing_msg.delete()
-
-                    # زمان‌بندی حذف پیام برای 3600 ثانیه (یک ساعت) بعد
-                    if context.job_queue:
-                        context.job_queue.run_once(
-                            delete_message_job,
-                            when=3600,
-                            chat_id=user.id,
-                            data={'message_id': sent_message.message_id}
-                        )
-                except Exception as e:
-                    await processing_msg.edit_text(f"❌ متاسفانه در ارسال فایل مشکلی از سمت سرور پیش آمد. لطفا به پشتیبانی اطلاع دهید.")
+            # اعتبارسنجی توکن در دیتابیس
+            validation = await validate_download_token(token)
+            
+            if validation["status"] == "error":
+                await processing_msg.edit_text(validation["message"])
             else:
-                await processing_msg.edit_text("❌ متاسفانه فایل این کتاب در دیتابیس یافت نشد.")
-        
-        # --- نمایش منوی دسته‌بندی بدون پیام سلام ---
-        categories_text = "📚 برای مشاهده و خرید سایر کتاب‌ها، می‌توانید از دسته‌بندی‌های زیر استفاده کنید:"
-        reply_markup = get_categories_keyboard(categories)
-        await update.message.reply_text(text=categories_text, reply_markup=reply_markup)
-        
-        return
+                book_id = validation["book_id"]
+                book = await get_book_by_id(book_id)
+                
+                if book and "file_link" in book:
+                    await processing_msg.edit_text(f"✅ لینک تایید شد. در حال آماده‌سازی کتاب: *{book['title']}* ...", parse_mode="Markdown")
+                    
+                    try:
+                        success_msg = f"📚 نام کتاب: {book['title']}\n\n📥 لینک دانلود:\n{book['file_link']}\n\n@MEDBookbot\n\n⚠️ این پیام برای امنیت بیشتر، یک ساعت دیگر به صورت خودکار حذف خواهد شد."
+                        sent_message = await context.bot.send_message(
+                            chat_id=user.id,
+                            text=success_msg,
+                            disable_web_page_preview=True
+                        )
+                        await processing_msg.delete()
+
+                        # زمان‌بندی حذف پیام برای 3600 ثانیه (یک ساعت) بعد
+                        if context.job_queue:
+                            context.job_queue.run_once(
+                                delete_message_job,
+                                when=3600,
+                                chat_id=user.id,
+                                data={'message_id': sent_message.message_id}
+                            )
+                    except Exception as e:
+                        await processing_msg.edit_text(f"❌ متاسفانه در ارسال فایل مشکلی از سمت سرور پیش آمد. لطفا به پشتیبانی اطلاع دهید.")
+                else:
+                    await processing_msg.edit_text("❌ متاسفانه فایل این کتاب در دیتابیس یافت نشد.")
+            
+            # نمایش منوی دسته‌بندی بدون پیام سلام
+            categories_text = "📚 برای مشاهده و خرید سایر کتاب‌ها، می‌توانید از دسته‌بندی‌های زیر استفاده کنید:"
+            reply_markup = get_categories_keyboard(categories)
+            await update.message.reply_text(text=categories_text, reply_markup=reply_markup)
+            return
+
+        # ۲. بررسی لینک اختصاصی معرفی کتاب (bk_)
+        elif arg.startswith("bk_"):
+            book = await get_book_by_short_id(arg)
+            
+            if book:
+                from utils.keyboards import get_book_detail_keyboard
+                
+                price = int(book.get('price', 0))
+                discount_percent = int(book.get('discount_percent', 0))
+                
+                if discount_percent > 0:
+                    final_price = int(price * (1 - discount_percent / 100))
+                    formatted_price = f"{price:,}"
+                    strikethrough_price = "".join([char + '\u0336' if char != ',' else char for char in formatted_price])
+                    lrm = '\u200E'
+                    price_text = f"{lrm}{strikethrough_price}{lrm} {final_price:,} تومان ({discount_percent}٪ تخفیف)"
+                else:
+                    final_price = price
+                    price_text = f"{price:,} تومان"
+                
+                text = (
+                    f"📖 *نام کتاب:* {html.escape(book['title'])}\n\n"
+                    f"💰 *مبلغ قابل پرداخت:* {price_text}\n\n"
+                    f"جهت پرداخت و دریافت لینک دانلود موقت، روی دکمه زیر کلیک کنید."
+                )
+                
+                reply_markup = get_book_detail_keyboard(str(book['_id']))
+                await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+                return
+            else:
+                await update.message.reply_text("❌ متاسفانه این کتاب یافت نشد یا از سیستم حذف شده است.")
+                # اینجا عمداً return نذاشتم تا اگر لینک خراب بود، پایین‌تر بره و منوی اصلی ربات رو به کاربر نشون بده
 
     reply_markup = get_categories_keyboard(categories)
     welcome_text = "سلام! به MEDBookbot خوش آمدید 📚\nلطفاً یک دسته‌بندی را انتخاب کنید یا نام کتاب را جستجو کنید:"

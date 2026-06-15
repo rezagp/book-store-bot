@@ -15,6 +15,7 @@ from database.db_manager import (
     update_book_field, 
     delete_book_from_db, 
     check_is_admin, 
+    get_book_by_id
 )
 
 # Add New Book
@@ -85,7 +86,8 @@ async def save_book(update: Update, context: ContextTypes.DEFAULT_TYPE):
     encoded_filename = urllib.parse.quote(raw_filename)
     file_link = f"https://dl.anatomypedia.ir/books/{encoded_filename}"
     
-    await add_book(
+    # دریافت short_id از دیتابیس
+    short_id = await add_book(
         category=context.user_data['new_book_cat'],
         title=context.user_data['new_book_title'],
         price=context.user_data['new_book_price'],
@@ -93,10 +95,14 @@ async def save_book(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file_link=file_link
     )
     
+    bot_username = context.bot.username
+    deep_link = f"https://ble.ir/{bot_username}?start={short_id}"
+    
     context.user_data.clear()
     await update.message.reply_text(
-        text="✅ کتاب جدید به همراه فایل با موفقیت در دیتابیس ذخیره شد!\n\nلطفاً یک گزینه را انتخاب کنید:",
-        reply_markup=admin_main_keyboard(is_super_admin=is_super)
+        text=f"✅ کتاب جدید با موفقیت ذخیره شد!\n\n🔗 لینک اختصاصی برای اشتراک‌گذاری در کانال:\n{deep_link}\n\nلطفاً یک گزینه را انتخاب کنید:",
+        reply_markup=admin_main_keyboard(is_super_admin=is_super),
+        parse_mode='Markdown'
     )
     return ConversationHandler.END
 
@@ -221,7 +227,8 @@ async def show_edit_fields(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("📁 ‌ویرایش دسته‌بندی", callback_data="edfield_category")
         ],
         [
-            InlineKeyboardButton("🔗 ویرایش لینک کتاب", callback_data="edfield_file_link")
+            InlineKeyboardButton("🔗 ویرایش لینک کتاب", callback_data="edfield_file_link"),
+            InlineKeyboardButton("📢 دریافت لینک اشتراک‌گذاری", callback_data="edfield_getlink"),
         ],
         [InlineKeyboardButton("✅ پایان ویرایش", callback_data="edfield_done")]
     ]
@@ -247,7 +254,26 @@ async def ask_for_new_field_value(update: Update, context: ContextTypes.DEFAULT_
         )
         context.user_data.clear()
         return ConversationHandler.END
+    
+    if data == "edfield_getlink":
+        book_id = context.user_data.get('edit_book_id')
+        book = await get_book_by_id(book_id)
+        bot_username = context.bot.username
         
+        short_id = book.get('short_id')
+        if not short_id:
+            await query.answer("خطا: این کتاب شناسه کوتاه ندارد!", show_alert=True)
+            return CHOOSE_FIELD_EDIT
+            
+        deep_link = f"https://ble.ir/{bot_username}?start={short_id}"
+        
+        await query.edit_message_text(
+            f"🔗 لینک اختصاصی کتاب جهت معرفی در کانال:\n\n{deep_link}\n\n(برای کپی کردن، روی لینک کلیک کنید)",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_edit_menu")]])
+        )
+        return CHOOSE_FIELD_EDIT
+    
     field_map = {
         "edfield_title": ("نام جدید", "title"),
         "edfield_price": ("قیمت جدید (به تومان)", "price"),

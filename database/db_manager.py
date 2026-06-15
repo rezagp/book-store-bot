@@ -3,6 +3,8 @@ from bson import ObjectId
 from datetime import datetime, timedelta, timezone
 import uuid
 import math
+import secrets
+import string
 
 def get_now_utc():
     """تابع کمکی برای تولید زمان استاندارد و جلوگیری از تکرار کد"""
@@ -27,15 +29,22 @@ async def add_categories(category_name):
         upsert=True
     )
 
+def generate_short_id(length=6):
+    chars = string.ascii_letters + string.digits
+    return "bk_" + ''.join(secrets.choice(chars) for _ in range(length))
+
 async def add_book(category, title, price, discount_percent, file_link):
+    short_id = generate_short_id()
     book_data = {
         "category": category,
         "title": title,
         "price": price,
         "discount_percent": discount_percent,
-        "file_link": file_link
+        "file_link": file_link,
+        "short_id": short_id  # <--- فیلد جدید
     }
     await books_collection.insert_one(book_data)
+    return short_id
 
 async def get_categories():
     cursor = categories_collection.find({})
@@ -260,3 +269,23 @@ async def upgrade_database():
         {"$set": {"role": "super_admin"}}
     )
     print("Super admin role configured successfully.")
+
+    await assign_short_ids_to_existing_books()
+
+async def get_book_by_short_id(short_id: str):
+    return await books_collection.find_one({"short_id": short_id})
+
+async def assign_short_ids_to_existing_books():
+    """این تابع فقط یک بار اجرا می‌شود تا به کتاب‌های قدیمی آیدی بدهد"""
+    cursor = books_collection.find({"short_id": {"$exists": False}})
+    books = await cursor.to_list(length=None)
+    count = 0
+    for book in books:
+        new_id = generate_short_id()
+        await books_collection.update_one(
+            {"_id": book["_id"]},
+            {"$set": {"short_id": new_id}}
+        )
+        count += 1
+    if count > 0:
+        print(f"Migration: Added short_id to {count} existing books.")
