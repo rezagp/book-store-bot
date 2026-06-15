@@ -1,4 +1,4 @@
-from database.connection import users_collection, categories_collection, books_collection, purchases_collection, links_collection
+from database.connection import users_collection, categories_collection, books_collection, purchases_collection, links_collection, settings_collection
 from bson import ObjectId
 from datetime import datetime, timedelta, timezone
 import uuid
@@ -289,3 +289,17 @@ async def assign_short_ids_to_existing_books():
         count += 1
     if count > 0:
         print(f"Migration: Added short_id to {count} existing books.")
+
+async def set_ad_text(ad_text: str):
+    await settings_collection.update_one(
+        {"setting_name": "ad_text"},
+        {"$set": {"text": ad_text}},
+        upsert=True
+    )
+
+async def get_ad_text():
+    doc = await settings_collection.find_one({"setting_name": "ad_text"})
+    return doc["text"] if doc else None
+
+async def clear_ad_text():
+    await settings_collection.delete_one({"setting_name": "ad_text"})

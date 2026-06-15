@@ -15,6 +15,7 @@ def admin_main_keyboard(is_super_admin=False):
         [InlineKeyboardButton("📦 آپلود گروهی (اکسل)", callback_data="admin_bulk_upload")],
         [InlineKeyboardButton("👥 لیست خریدارها", callback_data="show_buyers_page")],
         [InlineKeyboardButton("📊 آمار فروش", callback_data="admin_stats")],
+        [InlineKeyboardButton("📢 تنظیمات تبلیغ پیام‌ها", callback_data="admin_ad_settings")],
     ]
     
     if is_super_admin:

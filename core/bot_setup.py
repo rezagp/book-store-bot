@@ -8,6 +8,9 @@ from handlers.admin.admin_core import (
         statistics_handler,
         admin_back_to_menu,
         admin_exit_panel_handler,
+        ad_settings_menu_handler,
+        delete_ad_handler,
+        ad_setup_conv
 )
 from handlers.admin.admin_cats import (
         add_category_handler,
@@ -45,6 +48,9 @@ def register_handlers(application):
         application.add_handler(add_book_handler)
         application.add_handler(bulk_upload_handler)
         application.add_handler(statistics_handler)
+        application.add_handler(ad_settings_menu_handler)
+        application.add_handler(delete_ad_handler)
+        application.add_handler(ad_setup_conv)
         application.add_handler(admin_back_to_menu)
         application.add_handler(edit_category_conv)
         application.add_handler(delete_category_conv)

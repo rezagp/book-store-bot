@@ -12,7 +12,8 @@ from database.db_manager import (
     create_purchase_invoice, 
     validate_download_token, 
     check_is_admin,
-    get_book_by_short_id
+    get_book_by_short_id,
+    get_ad_text
 )
 from utils.keyboards import (
     get_categories_keyboard, 
@@ -56,7 +57,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await processing_msg.edit_text(f"✅ لینک تایید شد. در حال آماده‌سازی کتاب: *{book['title']}* ...", parse_mode="Markdown")
                     
                     try:
-                        success_msg = f"📚 نام کتاب: {book['title']}\n\n📥 لینک دانلود:\n{book['file_link']}\n\n@MEDBookbot\n\n⚠️ این پیام برای امنیت بیشتر، یک ساعت دیگر به صورت خودکار حذف خواهد شد."
+                        success_msg = f"📚 نام کتاب: {book['title']}\n\n📥 لینک دانلود:\n{book['file_link']}\n\n@MEDBookbot"
+                    
+                        # بررسی و افزودن تبلیغ
+                        ad_text = await get_ad_text()
+                        if ad_text:
+                            success_msg += f"\n\n🔸🔸🔸🔸🔸🔸\n{ad_text}\n🔸🔸🔸🔸🔸🔸"
+                            
+                        success_msg += "\n\n⚠️ این پیام برای امنیت بیشتر، یک ساعت دیگر به صورت خودکار حذف خواهد شد."
+                        
                         sent_message = await context.bot.send_message(
                             chat_id=user.id,
                             text=success_msg,
